@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  pdf-parser:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: pdf-text-parser
+    ports:
+      - "9005:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      # Persistent storage for organized documents
+      - organized_docs:/app/organized_documents
+      # Temporary files (can be ephemeral)
+      - temp_files:/app/temp
+      - temp_downloads:/app/temp_downloads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - pdf-parser-network
+
+  # Optional: Redis for caching (if you want to add caching later)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: pdf-parser-redis
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - pdf-parser-network
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: pdf-parser-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - pdf-parser
+    restart: unless-stopped
+    networks:
+      - pdf-parser-network
+
+volumes:
+  organized_docs:
+    driver: local
+  temp_files:
+    driver: local
+  temp_downloads:
+    driver: local
+  # redis_data:
+  #   driver: local
+
+networks:
+  pdf-parser-network:
+    driver: bridge
