@@ -1,24 +1,24 @@
 # Multi-stage Docker build for PDF Text Parser & Document Classifier
-FROM node:18-alpine AS base
+FROM node:18-slim AS base
 
 # Install system dependencies for PDF processing and OCR
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     python3 \
-    py3-pip \
-    make \
-    g++ \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    musl-dev \
-    giflib-dev \
-    pixman-dev \
-    pangomm-dev \
-    libjpeg-turbo-dev \
-    freetype-dev \
+    python3-pip \
+    build-essential \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev \
+    libpixman-1-dev \
+    libfontconfig1-dev \
+    libfreetype6-dev \
     poppler-utils \
     tesseract-ocr \
-    tesseract-ocr-data-eng
+    tesseract-ocr-eng \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -58,14 +58,7 @@ USER node
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "const http = require('http'); \
-    const options = { hostname: 'localhost', port: 3000, path: '/health', timeout: 2000 }; \
-    const req = http.request(options, (res) => { \
-        if (res.statusCode === 200) process.exit(0); \
-        else process.exit(1); \
-    }); \
-    req.on('error', () => process.exit(1)); \
-    req.end();"
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Expose port
 EXPOSE 3000
