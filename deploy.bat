@@ -125,7 +125,6 @@ if errorlevel 1 (
     echo [SUCCESS] Application is running successfully!
     echo [SUCCESS] Access the application at: http://localhost:9005
     echo [SUCCESS] Direct access (without Nginx): http://localhost:9006
-    echo [SUCCESS] HTTPS access: https://localhost:9443 (if SSL configured)
 )
 goto :end
 
