@@ -1190,7 +1190,7 @@ app.get('/', (req, res) => {
                     const base64Data = await fileToBase64(file);
                     sourceFiles.push({
                         filename: file.name,
-                        base64Data: base64Data.split(',')[1] // Remove data:application/pdf;base64, prefix
+                        base64Data: base64Data // fileToBase64 already returns clean base64 without prefix
                     });
                 }
 
@@ -2176,7 +2176,17 @@ app.get('/api/download/:zipId', async (req, res) => {
       });
     }
 
-    const filename = `organized_documents_${zipId}.zip`;
+    // Extract timestamp from zipId to create a user-friendly filename
+    // zipId format: zip_timestamp_randomstring
+    const timestampMatch = zipId.match(/zip_(\d+)_/);
+    let filename = 'organized_documents.zip';
+    
+    if (timestampMatch) {
+      const timestamp = parseInt(timestampMatch[1]);
+      const date = new Date(timestamp);
+      const formattedDate = date.toISOString().replace(/[:.]/g, '-').slice(0, -5); // Remove milliseconds and Z
+      filename = `organized_documents_${formattedDate}.zip`;
+    }
     
     // Set headers for file download
     res.setHeader('Content-Type', 'application/zip');
