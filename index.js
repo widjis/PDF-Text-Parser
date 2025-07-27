@@ -1,3 +1,4 @@
+require('dotenv').config();
 const PDFParser = require('./lib/pdfParser');
 const fs = require('fs');
 const path = require('path');

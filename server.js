@@ -61,7 +61,7 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Text Parser</title>
+    <title>Lazy PDF Parser</title>
     <style>
         * {
             margin: 0;
@@ -84,7 +84,7 @@ app.get('/', (req, res) => {
             border-radius: 20px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             padding: 40px;
-            max-width: 600px;
+            max-width: 840px;
             width: 100%;
         }
         
@@ -288,7 +288,7 @@ app.get('/', (req, res) => {
 <body>
     <div class="container">
         <div class="header">
-            <h1>PDF Text Parser</h1>
+            <h1>Lazy PDF Parser</h1>
             <p>Extract text from PDFs or classify documents with AI</p>
         </div>
         
@@ -761,6 +761,9 @@ app.get('/', (req, res) => {
             const results = data.results;
             const stats = data.statistics;
             
+            // Store classification data globally for organize function
+            window.lastClassificationData = data;
+            
             let resultHtml = '<h3>Classification Complete!</h3>' +
                 '<div class="metadata">' +
                     '<h4>Classification Summary</h4>' +
@@ -782,20 +785,68 @@ app.get('/', (req, res) => {
                     '</div>' +
                 '</div>' +
                 '<div class="metadata">' +
-                    '<h4>Classification Results</h4>';
+                    '<h4>Classification Results (Editable)</h4>' +
+                    '<div style="overflow-x: auto; margin-top: 10px;">' +
+                        '<table id="classificationTable" style="width: 100%; border-collapse: collapse; font-size: 14px;">' +
+                            '<thead>' +
+                                '<tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">' +
+                                    '<th style="padding: 12px 8px; text-align: left; border: 1px solid #dee2e6; font-weight: 600;">File Name</th>' +
+                                    '<th style="padding: 12px 8px; text-align: left; border: 1px solid #dee2e6; font-weight: 600;">Requester (Editable)</th>' +
+                                    '<th style="padding: 12px 8px; text-align: left; border: 1px solid #dee2e6; font-weight: 600;">Category (Editable)</th>' +
+                                    '<th style="padding: 12px 8px; text-align: center; border: 1px solid #dee2e6; font-weight: 600;">Confidence</th>' +
+                                '</tr>' +
+                            '</thead>' +
+                            '<tbody>';
             
-            results.forEach(result => {
-                const statusIcon = result.success ? 'SUCCESS' : 'FAILED';
-                const category = result.success ? result.category : 'Failed';
+            // Get available categories for dropdown
+            const categories = {
+                'BA_HALO': 'Kartu Halo',
+                'BA_KKB': 'Berita Kehilangan',
+                'BASTB': 'Serah Terima Barang',
+                'CHR': 'Checklist Reimbursement HP',
+                'COF': 'COF Scan',
+                'LOF': 'ICT Loan Form',
+                'OOPR': 'Out of Policy Request',
+                'SRF': 'SRF Scan',
+                'DO': 'Skip'
+            };
+            
+            results.forEach((result, index) => {
+                const statusIcon = result.success ? '✅' : '❌';
+                const category = result.success ? result.category : 'OOPR';
                 const confidence = result.success ? Math.round(result.confidence * 100) + '%' : 'N/A';
+                const requester = result.success && result.requester ? result.requester.replace(/"/g, '&quot;') : 'N/A';
+                const rowColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
                 
-                resultHtml += '<div class="metadata-item">' +
-                    '<span>' + statusIcon + ' ' + result.filename + '</span>' +
-                    '<span>' + category + ' (' + confidence + ')</span>' +
-                '</div>';
+                // Create category dropdown options
+                let categoryOptions = '';
+                Object.entries(categories).forEach(([code, name]) => {
+                    const selected = code === category ? 'selected' : '';
+                    categoryOptions += '<option value="' + code + '" ' + selected + '>' + code + ' - ' + name + '</option>';
+                });
+                
+                resultHtml += '<tr style="background-color: ' + rowColor + '; border-bottom: 1px solid #dee2e6;">' +
+                    '<td style="padding: 10px 8px; border: 1px solid #dee2e6;">' +
+                        '<span style="margin-right: 8px;">' + statusIcon + '</span>' +
+                        '<span style="font-weight: 500;">' + result.filename + '</span>' +
+                    '</td>' +
+                    '<td style="padding: 10px 8px; border: 1px solid #dee2e6;">' +
+                        '<input type="text" id="requester_' + index + '" value="' + requester + '" ' +
+                        'style="width: 100%; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;" ' +
+                        'onchange="updateClassificationData(' + index + ', &quot;requester&quot;, this.value)">' +
+                    '</td>' +
+                    '<td style="padding: 10px 8px; border: 1px solid #dee2e6;">' +
+                        '<select id="category_' + index + '" ' +
+                        'style="width: 100%; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;" ' +
+                        'onchange="updateClassificationData(' + index + ', &quot;category&quot;, this.value)">' +
+                        categoryOptions +
+                        '</select>' +
+                    '</td>' +
+                    '<td style="padding: 10px 8px; border: 1px solid #dee2e6; text-align: center;">' + confidence + '</td>' +
+                '</tr>';
             });
             
-            resultHtml += '</div>';
+            resultHtml += '</tbody></table></div></div>';
             
             if (stats.categoryBreakdown) {
                 resultHtml += '<div class="metadata">' +
@@ -811,7 +862,399 @@ app.get('/', (req, res) => {
                 resultHtml += '</div>';
             }
             
+            // Add document numbering configuration section
+            if (stats.successfulClassifications > 0) {
+                resultHtml += '<div class="metadata" style="margin-top: 20px;">' +
+                    '<h4>Document Numbering Configuration</h4>' +
+                    '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px;">';
+                
+                // Create numbering inputs for each category
+                const categoryPrefixes = {
+                    'BA_HALO': 'ICTBAK',
+                    'BA_KKB': 'ICTBKK',
+                    'BASTB': 'ICTSTB',
+                    'CHR': 'ICTCRH',
+                    'COF': 'ICTCOF',
+                    'LOF': 'ICTLOA',
+                    'OOPR': 'ICTOOP',
+                    'SRF': 'ICTSRF',
+                    'DO': 'ICTSKP'
+                };
+                
+                Object.entries(categoryPrefixes).forEach(([category, prefix]) => {
+                    resultHtml += '<div style="display: flex; flex-direction: column; padding: 10px; border: 1px solid #dee2e6; border-radius: 4px; background-color: #f8f9fa;">' +
+                        '<label style="font-weight: 600; margin-bottom: 5px; color: #495057;">' + category + ' (' + prefix + '):</label>' +
+                        '<input type="number" id="start_' + category + '" value="1" min="1" ' +
+                        'style="padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">' +
+                    '</div>';
+                });
+                
+                resultHtml += '</div></div>';
+                
+                resultHtml += '<div style="text-align: center; margin-top: 20px;">' +
+                    '<button onclick="organizeClassifiedFiles()" class="btn" style="background: #28a745; margin-right: 10px;">📁 Organize Files to Folders</button>' +
+                    '<button onclick="downloadOrganizedFiles()" class="btn" style="background: #007bff; margin-right: 10px;">📦 Download as ZIP</button>' +
+                    '<button onclick="previewOrganization()" class="btn" style="background: #17a2b8;">👁️ Preview Organization</button>' +
+                '</div>';
+            }
+            
             return resultHtml;
+        }
+
+        // Function to update classification data when user edits fields
+        function updateClassificationData(index, field, value) {
+            if (window.lastClassificationData && window.lastClassificationData.results[index]) {
+                window.lastClassificationData.results[index][field] = value;
+                console.log('[FRONTEND] Updated classification data:', window.lastClassificationData.results[index]);
+            }
+        }
+
+        // Function to organize classified files
+        async function organizeClassifiedFiles() {
+            console.log('[FRONTEND] Starting organize files process...');
+            
+            if (!window.lastClassificationData) {
+                console.error('[FRONTEND] No classification data available');
+                alert('No classification data available. Please classify files first.');
+                return;
+            }
+
+            console.log('[FRONTEND] Using cached classification data:', window.lastClassificationData);
+
+            try {
+                // Collect document numbering configuration
+                const categoryPrefixes = {
+                    'BA_HALO': 'ICTBAK',
+                    'BA_KKB': 'ICTBKK',
+                    'BASTB': 'ICTSTB',
+                    'CHR': 'ICTCRH',
+                    'COF': 'ICTCOF',
+                    'LOF': 'ICTLOA',
+                    'OOPR': 'ICTOOP',
+                    'SRF': 'ICTSRF',
+                    'DO': 'ICTSKP'
+                };
+
+                const numberingConfig = {};
+                Object.keys(categoryPrefixes).forEach(category => {
+                    const startElement = document.getElementById('start_' + category);
+                    if (startElement) {
+                        numberingConfig[category] = parseInt(startElement.value) || 1;
+                    }
+                });
+
+                console.log('[FRONTEND] Document numbering config:', numberingConfig);
+
+                const files = classifyFileInput.files;
+                if (!files || files.length === 0) {
+                    console.error('[FRONTEND] No files available for organization');
+                    alert('No files available for organization.');
+                    return;
+                }
+
+                console.log('[FRONTEND] Files to organize:', Array.from(files).map(f => ({
+                    name: f.name,
+                    size: f.size,
+                    type: f.type
+                })));
+
+                // Show loading
+                showClassifyResult('Organizing files to folders using cached classification results...', 'info');
+
+                const formData = new FormData();
+                for (let i = 0; i < files.length; i++) {
+                    console.log('[FRONTEND] Adding file ' + (i + 1) + ': ' + files[i].name);
+                    formData.append('pdfs', files[i]);
+                }
+
+                // Add cached classification results and numbering config to the form data
+                formData.append('classificationResults', JSON.stringify(window.lastClassificationData.results));
+                formData.append('numberingConfig', JSON.stringify(numberingConfig));
+
+                console.log('[FRONTEND] Sending organize request with cached results to /api/organize-cached...');
+                const response = await fetch('/api/organize-cached', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                console.log('[FRONTEND] Response status:', response.status);
+                console.log('[FRONTEND] Response headers:', Object.fromEntries(response.headers.entries()));
+
+                let data;
+                try {
+                    const responseText = await response.text();
+                    console.log('[FRONTEND] Raw response:', responseText);
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('[FRONTEND] Error parsing response:', parseError);
+                    throw new Error('Failed to parse server response: ' + parseError.message);
+                }
+
+                console.log('[FRONTEND] Parsed response data:', data);
+
+                if (data.success) {
+                    console.log('[FRONTEND] Organization successful');
+                    let resultHtml = '<h3>✅ Files Organized Successfully!</h3>';
+                    resultHtml += '<p style="color: #28a745; font-weight: bold;">📋 Used cached classification results with custom file naming!</p>';
+                    
+                    if (data.organization && data.organization.organized) {
+                        console.log('[FRONTEND] Organized files:', data.organization.organized);
+                        resultHtml += '<div class="metadata"><h4>Organized Files</h4>';
+                        data.organization.organized.forEach(file => {
+                            resultHtml += '<div class="metadata-item">' +
+                                '<span>📄 ' + file.originalName + '</span>' +
+                                '<span>→ ' + file.newName + ' (in ' + file.targetFolder + ')</span>' +
+                                '</div>';
+                        });
+                        resultHtml += '</div>';
+                    }
+
+                    if (data.organization && data.organization.summary) {
+                        const summary = data.organization.summary;
+                        console.log('[FRONTEND] Organization summary:', summary);
+                        resultHtml += '<div class="metadata"><h4>Summary</h4>' +
+                            '<div class="metadata-item"><span>Total Files:</span><span>' + summary.total + '</span></div>' +
+                            '<div class="metadata-item"><span>Successfully Organized:</span><span>' + summary.successful + '</span></div>' +
+                            '<div class="metadata-item"><span>Failed:</span><span>' + summary.failed + '</span></div>' +
+                        '</div>';
+                    }
+
+                    showClassifyResult(resultHtml, 'success');
+                } else {
+                    console.error('[FRONTEND] Organization failed:', data);
+                    let errorMessage = 'Error organizing files: ' + (data.error || 'Unknown error');
+                    
+                    if (data.errorType) {
+                        errorMessage += ' (' + data.errorType + ')';
+                    }
+                    
+                    if (data.details && typeof data.details === 'object') {
+                        console.error('[FRONTEND] Error details:', data.details);
+                        errorMessage += '\\n\\nDetails logged to console.';
+                    }
+                    
+                    showClassifyResult(errorMessage, 'error');
+                }
+
+            } catch (error) {
+                console.error('[FRONTEND] CRITICAL ERROR in organizeClassifiedFiles:');
+                console.error('[FRONTEND] Error type:', error.constructor.name);
+                console.error('[FRONTEND] Error message:', error.message);
+                console.error('[FRONTEND] Error stack:', error.stack);
+                console.error('[FRONTEND] Classification data:', window.lastClassificationData);
+                console.error('[FRONTEND] Files:', classifyFileInput.files);
+                
+                let errorMessage = 'Error organizing files: ' + error.message;
+                errorMessage += '\\n\\nDetailed error information has been logged to the browser console.';
+                errorMessage += '\\nPlease check the console (F12) for more details.';
+                
+                showClassifyResult(errorMessage, 'error');
+            }
+        }
+
+        // Function to preview organization
+        async function previewOrganization() {
+            console.log('[FRONTEND] Starting preview organization...');
+            
+            if (!window.lastClassificationData) {
+                console.error('[FRONTEND] No classification data available for preview');
+                alert('No classification data available. Please classify files first.');
+                return;
+            }
+
+            console.log('[FRONTEND] Using cached classification data for preview:', window.lastClassificationData);
+
+            try {
+                // Show loading
+                showClassifyResult('Generating organization preview using cached classification results...', 'info');
+
+                console.log('[FRONTEND] Sending preview request with cached results to /api/organize-preview-cached...');
+                const response = await fetch('/api/organize-preview-cached', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        classificationResults: window.lastClassificationData.results,
+                        outputDir: './organized_documents'
+                    })
+                });
+
+                console.log('[FRONTEND] Preview response status:', response.status);
+                console.log('[FRONTEND] Preview response headers:', Object.fromEntries(response.headers.entries()));
+
+                let data;
+                try {
+                    const responseText = await response.text();
+                    console.log('[FRONTEND] Raw preview response:', responseText);
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('[FRONTEND] Error parsing preview response:', parseError);
+                    throw new Error('Failed to parse server response: ' + parseError.message);
+                }
+
+                console.log('[FRONTEND] Parsed preview data:', data);
+
+                if (data.success) {
+                    console.log('[FRONTEND] Preview generation successful');
+                    let resultHtml = '<h3>👁️ Organization Preview</h3>';
+                    resultHtml += '<p style="color: #17a2b8; font-weight: bold;">📋 Using cached classification results - no re-classification needed!</p>';
+                    
+                    if (data.preview && data.preview.folders) {
+                        console.log('[FRONTEND] Preview folders:', data.preview.folders);
+                        resultHtml += '<div class="metadata"><h4>Folder Structure Preview</h4>';
+                        
+                        Object.entries(data.preview.folders).forEach(([folder, files]) => {
+                            resultHtml += '<div class="metadata-item" style="flex-direction: column; align-items: flex-start;">' +
+                                '<span style="font-weight: bold; color: #007bff;">📁 ' + folder + '</span>';
+                            
+                            files.forEach(file => {
+                                resultHtml += '<span style="margin-left: 20px; color: #666;">📄 ' + file + '</span>';
+                            });
+                            
+                            resultHtml += '</div>';
+                        });
+                        
+                        resultHtml += '</div>';
+                    }
+
+                    if (data.preview && data.preview.summary) {
+                        const summary = data.preview.summary;
+                        console.log('[FRONTEND] Preview summary:', summary);
+                        resultHtml += '<div class="metadata"><h4>Preview Summary</h4>' +
+                            '<div class="metadata-item"><span>Total Files:</span><span>' + summary.totalFiles + '</span></div>' +
+                            '<div class="metadata-item"><span>Folders to Create:</span><span>' + summary.foldersToCreate + '</span></div>' +
+                        '</div>';
+                    }
+
+                    showClassifyResult(resultHtml, 'success');
+                } else {
+                    console.error('[FRONTEND] Preview generation failed:', data);
+                    let errorMessage = 'Error generating preview: ' + (data.error || 'Unknown error');
+                    
+                    if (data.errorType) {
+                        errorMessage += ' (' + data.errorType + ')';
+                    }
+                    
+                    showClassifyResult(errorMessage, 'error');
+                }
+
+            } catch (error) {
+                console.error('[FRONTEND] CRITICAL ERROR in previewOrganization:');
+                console.error('[FRONTEND] Error type:', error.constructor.name);
+                console.error('[FRONTEND] Error message:', error.message);
+                console.error('[FRONTEND] Error stack:', error.stack);
+                console.error('[FRONTEND] Classification data:', window.lastClassificationData);
+                
+                let errorMessage = 'Error generating preview: ' + error.message;
+                errorMessage += '\\n\\nDetailed error information has been logged to the browser console.';
+                errorMessage += '\\nPlease check the console (F12) for more details.';
+                
+                showClassifyResult(errorMessage, 'error');
+            }
+        }
+
+        // Function to download organized files as ZIP
+        async function downloadOrganizedFiles() {
+            console.log('[FRONTEND] Starting download organized files process...');
+            
+            if (!window.lastClassificationData) {
+                console.error('[FRONTEND] No classification data available');
+                alert('No classification data available. Please classify files first.');
+                return;
+            }
+
+            console.log('[FRONTEND] Using cached classification data:', window.lastClassificationData);
+
+            try {
+                const files = classifyFileInput.files;
+                if (!files || files.length === 0) {
+                    console.error('[FRONTEND] No files available for download');
+                    alert('No files available for download.');
+                    return;
+                }
+
+                console.log('[FRONTEND] Files to download:', Array.from(files).map(f => ({
+                    name: f.name,
+                    size: f.size,
+                    type: f.type
+                })));
+
+                // Show loading
+                showClassifyResult('Creating downloadable ZIP file with organized documents...', 'info');
+
+                // Convert files to base64 for cached download
+                const sourceFiles = [];
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const base64Data = await fileToBase64(file);
+                    sourceFiles.push({
+                        filename: file.name,
+                        base64Data: base64Data.split(',')[1] // Remove data:application/pdf;base64, prefix
+                    });
+                }
+
+                console.log('[FRONTEND] Sending download request with cached results to /api/organize-download-cached...');
+                const response = await fetch('/api/organize-download-cached', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        classificationResults: window.lastClassificationData.results,
+                        sourceFiles: sourceFiles
+                    })
+                });
+
+                console.log('[FRONTEND] Response status:', response.status);
+                const data = await response.json();
+                console.log('[FRONTEND] Parsed response data:', data);
+
+                if (data.success && data.download) {
+                    console.log('[FRONTEND] ZIP creation successful');
+                    
+                    // Create download link
+                    const downloadUrl = \`/api/download/\${data.download.zipId}\`;
+                    
+                    let resultHtml = '<h3>📦 ZIP File Ready for Download!</h3>';
+                    resultHtml += '<p style="color: #007bff; font-weight: bold;">Your organized documents have been packaged into a ZIP file.</p>';
+                    
+                    resultHtml += '<div style="text-align: center; margin: 20px 0;">';
+                    resultHtml += '<a href="' + downloadUrl + '" download="' + data.download.filename + '" class="btn" style="background: #28a745; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; display: inline-block;">';
+                    resultHtml += '⬇️ Download ZIP File</a>';
+                    resultHtml += '</div>';
+
+                    if (data.download.summary) {
+                        const summary = data.download.summary;
+                        console.log('[FRONTEND] Download summary:', summary);
+                        resultHtml += '<div class="metadata"><h4>Package Summary</h4>' +
+                            '<div class="metadata-item"><span>Total Files:</span><span>' + summary.total + '</span></div>' +
+                            '<div class="metadata-item"><span>Successfully Organized:</span><span>' + summary.successful + '</span></div>' +
+                            '<div class="metadata-item"><span>Failed:</span><span>' + summary.failed + '</span></div>' +
+                        '</div>';
+                    }
+
+                    resultHtml += '<p style="color: #666; font-size: 0.9em; margin-top: 15px;">💡 The ZIP file will be automatically deleted after download for security.</p>';
+
+                    showClassifyResult(resultHtml, 'success');
+                } else {
+                    console.error('[FRONTEND] ZIP creation failed:', data);
+                    let errorMessage = 'Error creating ZIP file: ' + (data.error || 'Unknown error');
+                    showClassifyResult(errorMessage, 'error');
+                }
+
+            } catch (error) {
+                console.error('[FRONTEND] CRITICAL ERROR in downloadOrganizedFiles:');
+                console.error('[FRONTEND] Error type:', error.constructor.name);
+                console.error('[FRONTEND] Error message:', error.message);
+                console.error('[FRONTEND] Error stack:', error.stack);
+                
+                let errorMessage = 'Error creating download: ' + error.message;
+                errorMessage += '\\n\\nDetailed error information has been logged to the browser console.';
+                errorMessage += '\\nPlease check the console (F12) for more details.';
+                
+                showClassifyResult(errorMessage, 'error');
+            }
         }
     </script>
 </body>
@@ -1185,7 +1628,170 @@ app.post('/api/classify-batch', upload.array('pdfs', 50), async (req, res) => {
 
 // Organization endpoints
 app.post('/api/organize', upload.array('pdfs', 50), async (req, res) => {
+  console.log('[ORGANIZE] Starting file organization process...');
+  console.log('[ORGANIZE] Request body:', req.body);
+  console.log('[ORGANIZE] Files received:', req.files ? req.files.length : 0);
+  
   try {
+    if (!req.files || req.files.length === 0) {
+      console.log('[ORGANIZE] ERROR: No PDF files provided');
+      return res.status(400).json({
+        success: false,
+        error: 'No PDF files provided'
+      });
+    }
+
+    console.log('[ORGANIZE] Files details:', req.files.map(f => ({
+      originalname: f.originalname,
+      size: f.size,
+      mimetype: f.mimetype,
+      path: f.path
+    })));
+
+    const outputDir = req.body.outputDir || './organized_documents';
+    const createZip = req.body.createZip === 'true';
+
+    console.log('[ORGANIZE] Configuration:', { outputDir, createZip });
+
+    // First classify all documents using buffer-based method
+    console.log('[ORGANIZE] Reading file buffers...');
+    const documents = req.files.map(file => {
+      try {
+        const buffer = fs.readFileSync(file.path);
+        console.log(`[ORGANIZE] Successfully read buffer for ${file.originalname}, size: ${buffer.length} bytes`);
+        return {
+          pdfBuffer: buffer,
+          filename: file.originalname
+        };
+      } catch (readError) {
+        console.error(`[ORGANIZE] Error reading file ${file.originalname}:`, readError);
+        throw readError;
+      }
+    });
+
+    console.log('[ORGANIZE] Starting classification...');
+    const classificationResults = await classifier.classifyBatchFromBuffers(documents);
+    console.log('[ORGANIZE] Classification result:', {
+      success: Array.isArray(classificationResults),
+      resultsCount: classificationResults ? classificationResults.length : 0,
+      error: Array.isArray(classificationResults) ? null : 'Invalid result format'
+    });
+    
+    if (!Array.isArray(classificationResults) || classificationResults.length === 0) {
+      console.log('[ORGANIZE] Classification failed: Invalid or empty results');
+      return res.status(400).json({
+        success: false,
+        error: 'Classification failed: Invalid or empty results',
+        details: classificationResults
+      });
+    }
+
+    // Check if any classification failed
+    const failedClassifications = classificationResults.filter(result => !result.success);
+    if (failedClassifications.length > 0) {
+      console.log('[ORGANIZE] Some classifications failed:', failedClassifications.map(f => f.filename));
+    }
+
+    // Log classification results
+    console.log('[ORGANIZE] Classification details:');
+    classificationResults.forEach((result, index) => {
+      console.log(`[ORGANIZE] File ${index + 1}: ${result.filename} -> ${result.success ? result.category : 'FAILED'} (${result.success ? Math.round(result.confidence * 100) + '%' : result.error})`);
+    });
+
+    // Then organize the files
+    console.log('[ORGANIZE] Starting file organization...');
+    
+    // Create a mapping of original filenames to their temporary file paths
+    const fileMapping = {};
+    req.files.forEach(file => {
+      fileMapping[file.originalname] = file.path;
+    });
+    
+    console.log('[ORGANIZE] File mapping:', fileMapping);
+    console.log('[ORGANIZE] Target directory:', outputDir);
+    
+    // Copy files to a temporary directory with their original names for organization
+    const tempOrgDir = './temp_organize';
+    if (!fs.existsSync(tempOrgDir)) {
+      fs.mkdirSync(tempOrgDir, { recursive: true });
+    }
+    
+    // Copy files with original names
+    for (const [originalName, tempPath] of Object.entries(fileMapping)) {
+      const targetPath = path.join(tempOrgDir, originalName);
+      fs.copyFileSync(tempPath, targetPath);
+    }
+    
+    const organizationResult = await fileOrganizer.organizeFiles(
+      classificationResults,
+      tempOrgDir,  // Source directory (temp directory with original names)
+      outputDir    // Target directory (where organized files should go)
+    );
+    
+    // Clean up temporary organization directory
+    fs.rmSync(tempOrgDir, { recursive: true, force: true });
+
+    console.log('[ORGANIZE] Organization result:', {
+      success: organizationResult.success,
+      organized: organizationResult.organized ? organizationResult.organized.length : 0,
+      summary: organizationResult.summary
+    });
+
+    // Clean up uploaded files
+    console.log('[ORGANIZE] Cleaning up temporary files...');
+    req.files.forEach(file => {
+      fs.unlink(file.path, (err) => {
+        if (err) {
+          console.error(`[ORGANIZE] Error deleting temp file ${file.originalname}:`, err);
+        } else {
+          console.log(`[ORGANIZE] Deleted temp file: ${file.originalname}`);
+        }
+      });
+    });
+
+    console.log('[ORGANIZE] Process completed successfully');
+    res.json({
+      success: true,
+      classification: {
+        success: true,
+        results: classificationResults
+      },
+      organization: organizationResult
+    });
+
+  } catch (error) {
+    console.error('[ORGANIZE] CRITICAL ERROR:');
+    console.error('[ORGANIZE] Error type:', error.constructor.name);
+    console.error('[ORGANIZE] Error message:', error.message);
+    console.error('[ORGANIZE] Error stack:', error.stack);
+    console.error('[ORGANIZE] Request details:', {
+      files: req.files ? req.files.map(f => ({ name: f.originalname, size: f.size })) : 'none',
+      body: req.body
+    });
+    
+    // Clean up files on error
+    if (req.files) {
+      req.files.forEach(file => {
+        fs.unlink(file.path, (err) => {
+          if (err) console.error(`[ORGANIZE] Error cleaning up file ${file.originalname}:`, err);
+        });
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: `Organization failed: ${error.message}`,
+      errorType: error.constructor.name,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// New endpoint for organizing with cached classification results
+app.post('/api/organize-cached', upload.array('pdfs', 50), async (req, res) => {
+  try {
+    console.log('[ORGANIZE-CACHED] Starting organization with cached results...');
+    
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
@@ -1193,46 +1799,124 @@ app.post('/api/organize', upload.array('pdfs', 50), async (req, res) => {
       });
     }
 
+    // Get cached classification results from request body
+    let cachedResults;
+    try {
+      cachedResults = JSON.parse(req.body.classificationResults);
+    } catch (parseError) {
+      console.error('[ORGANIZE-CACHED] Error parsing cached results:', parseError);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid cached classification results'
+      });
+    }
+
+    // Get numbering configuration from request body
+    let numberingConfig = {};
+    try {
+      if (req.body.numberingConfig) {
+        numberingConfig = JSON.parse(req.body.numberingConfig);
+        console.log('[ORGANIZE-CACHED] Numbering config received:', numberingConfig);
+      }
+    } catch (parseError) {
+      console.error('[ORGANIZE-CACHED] Error parsing numbering config:', parseError);
+      // Continue with default numbering if parsing fails
+    }
+
+    if (!Array.isArray(cachedResults) || cachedResults.length === 0) {
+      console.log('[ORGANIZE-CACHED] Invalid cached results format');
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or empty cached classification results'
+      });
+    }
+
+    console.log('[ORGANIZE-CACHED] Using cached classification results for', cachedResults.length, 'files');
+
     const outputDir = req.body.outputDir || './organized_documents';
     const createZip = req.body.createZip === 'true';
 
-    // First classify all documents using buffer-based method
-    const documents = req.files.map(file => ({
-      pdfBuffer: fs.readFileSync(file.path),
-      filename: file.originalname
-    }));
+    console.log('[ORGANIZE-CACHED] Configuration:', { outputDir, createZip, numberingConfig });
 
-    const classificationResult = await classifier.classifyBatchFromBuffers(documents);
+    // Create a mapping of original filenames to their temporary file paths
+    const fileMapping = {};
+    req.files.forEach(file => {
+      fileMapping[file.originalname] = file.path;
+    });
     
-    if (!classificationResult.success) {
-      return res.status(400).json(classificationResult);
+    console.log('[ORGANIZE-CACHED] File mapping:', fileMapping);
+    
+    // Copy files to a temporary directory with their original names for organization
+    const tempOrgDir = './temp_organize_cached';
+    if (!fs.existsSync(tempOrgDir)) {
+      fs.mkdirSync(tempOrgDir, { recursive: true });
     }
-
-    // Then organize the files
-    const organizationResult = await fileOrganizer.organizeFiles(
-      classificationResult.results,
-      outputDir,
-      createZip
+    
+    // Copy files with original names
+    for (const [originalName, tempPath] of Object.entries(fileMapping)) {
+      const targetPath = path.join(tempOrgDir, originalName);
+      fs.copyFileSync(tempPath, targetPath);
+    }
+    
+    console.log('[ORGANIZE-CACHED] Starting file organization with cached results and custom naming...');
+    const organizationResult = await fileOrganizer.organizeFilesWithNumbering(
+      cachedResults,   // Use cached classification results
+      tempOrgDir,      // Source directory (temp directory with original names)
+      outputDir,       // Target directory (where organized files should go)
+      numberingConfig  // Document numbering configuration
     );
+    
+    // Clean up temporary organization directory
+    fs.rmSync(tempOrgDir, { recursive: true, force: true });
+
+    console.log('[ORGANIZE-CACHED] Organization result:', {
+      success: organizationResult.success,
+      organized: organizationResult.organized ? organizationResult.organized.length : 0,
+      summary: organizationResult.summary
+    });
 
     // Clean up uploaded files
+    console.log('[ORGANIZE-CACHED] Cleaning up temporary files...');
     req.files.forEach(file => {
       fs.unlink(file.path, (err) => {
-        if (err) console.error('Error deleting file:', err);
+        if (err) {
+          console.error(`[ORGANIZE-CACHED] Error deleting temp file ${file.originalname}:`, err);
+        } else {
+          console.log(`[ORGANIZE-CACHED] Deleted temp file: ${file.originalname}`);
+        }
       });
     });
 
+    console.log('[ORGANIZE-CACHED] Process completed successfully');
     res.json({
       success: true,
-      classification: classificationResult,
+      classification: {
+        success: true,
+        results: cachedResults
+      },
       organization: organizationResult
     });
 
   } catch (error) {
-    console.error('Organization error:', error);
+    console.error('[ORGANIZE-CACHED] CRITICAL ERROR:');
+    console.error('[ORGANIZE-CACHED] Error type:', error.constructor.name);
+    console.error('[ORGANIZE-CACHED] Error message:', error.message);
+    console.error('[ORGANIZE-CACHED] Error stack:', error.stack);
+    
+    // Clean up files on error
+    if (req.files) {
+      req.files.forEach(file => {
+        fs.unlink(file.path, (err) => {
+          if (err) console.error(`[ORGANIZE-CACHED] Error cleaning up file ${file.originalname}:`, err);
+        });
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: `Organization failed: ${error.message}`,
+      errorType: error.constructor.name,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -1255,15 +1939,18 @@ app.post('/api/organize-preview', upload.array('pdfs', 50), async (req, res) => 
       filename: file.originalname
     }));
 
-    const classificationResult = await classifier.classifyBatchFromBuffers(documents);
+    const classificationResults = await classifier.classifyBatchFromBuffers(documents);
     
-    if (!classificationResult.success) {
-      return res.status(400).json(classificationResult);
+    if (!Array.isArray(classificationResults) || classificationResults.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Classification failed: Invalid or empty results'
+      });
     }
 
     // Preview organization without moving files
     const preview = await fileOrganizer.previewOrganization(
-      classificationResult.results,
+      classificationResults,
       outputDir
     );
 
@@ -1276,7 +1963,10 @@ app.post('/api/organize-preview', upload.array('pdfs', 50), async (req, res) => 
 
     res.json({
       success: true,
-      classification: classificationResult,
+      classification: {
+        success: true,
+        results: classificationResults
+      },
       preview: preview
     });
 
@@ -1285,6 +1975,244 @@ app.post('/api/organize-preview', upload.array('pdfs', 50), async (req, res) => 
     res.status(500).json({
       success: false,
       error: 'Internal server error'
+    });
+  }
+});
+
+// Preview organization with cached results endpoint
+app.post('/api/organize-preview-cached', express.json(), async (req, res) => {
+  try {
+    console.log('[PREVIEW-CACHED] Starting preview with cached results...');
+    
+    const { classificationResults, outputDir = './organized_documents' } = req.body;
+
+    if (!Array.isArray(classificationResults) || classificationResults.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or empty cached classification results'
+      });
+    }
+
+    console.log('[PREVIEW-CACHED] Using cached classification results for', classificationResults.length, 'files');
+
+    // Preview organization without moving files
+    const preview = await fileOrganizer.previewOrganization(
+      classificationResults,
+      outputDir
+    );
+
+    console.log('[PREVIEW-CACHED] Preview generated successfully');
+    res.json({
+      success: true,
+      classification: {
+        success: true,
+        results: classificationResults
+      },
+      preview: preview
+    });
+
+  } catch (error) {
+    console.error('[PREVIEW-CACHED] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
+
+// Create downloadable ZIP of organized documents
+app.post('/api/organize-download', upload.array('pdfs', 50), async (req, res) => {
+  try {
+    console.log('[ORGANIZE-DOWNLOAD] Starting organization for download...');
+    
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No PDF files provided'
+      });
+    }
+
+    // First classify all documents using buffer-based method
+    const documents = req.files.map(file => ({
+      pdfBuffer: fs.readFileSync(file.path),
+      filename: file.originalname
+    }));
+
+    console.log('[ORGANIZE-DOWNLOAD] Classifying', documents.length, 'documents...');
+    const classificationResults = await classifier.classifyBatchFromBuffers(documents);
+    
+    if (!Array.isArray(classificationResults) || classificationResults.length === 0) {
+      // Clean up uploaded files on error
+      req.files.forEach(file => {
+        fs.unlink(file.path, (err) => {
+          if (err) console.error('[ORGANIZE-DOWNLOAD] Error cleaning up file:', err);
+        });
+      });
+      
+      return res.status(400).json({
+        success: false,
+        error: 'Classification failed: Invalid or empty results'
+      });
+    }
+
+    console.log('[ORGANIZE-DOWNLOAD] Creating downloadable ZIP...');
+    
+    // Create downloadable ZIP with organized files
+    const zipResult = await fileOrganizer.createDownloadableZip(
+      classificationResults,
+      req.files.map(file => file.path) // source file paths
+    );
+
+    // Clean up uploaded files
+    console.log('[ORGANIZE-DOWNLOAD] Cleaning up uploaded files...');
+    req.files.forEach(file => {
+      fs.unlink(file.path, (err) => {
+        if (err) {
+          console.error(`[ORGANIZE-DOWNLOAD] Error deleting temp file ${file.originalname}:`, err);
+        } else {
+          console.log(`[ORGANIZE-DOWNLOAD] Deleted temp file: ${file.originalname}`);
+        }
+      });
+    });
+
+    console.log('[ORGANIZE-DOWNLOAD] ZIP created successfully:', zipResult.zipPath);
+    res.json({
+      success: true,
+      classification: {
+        success: true,
+        results: classificationResults
+      },
+      download: {
+        zipId: zipResult.zipId,
+        filename: zipResult.filename,
+        summary: zipResult.summary
+      }
+    });
+
+  } catch (error) {
+    console.error('[ORGANIZE-DOWNLOAD] Error:', error);
+    
+    // Clean up files on error
+    if (req.files) {
+      req.files.forEach(file => {
+        fs.unlink(file.path, (err) => {
+          if (err) console.error(`[ORGANIZE-DOWNLOAD] Error cleaning up file ${file.originalname}:`, err);
+        });
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: `Organization failed: ${error.message}`
+    });
+  }
+});
+
+// Create downloadable ZIP with cached classification results
+app.post('/api/organize-download-cached', express.json(), async (req, res) => {
+  try {
+    console.log('[ORGANIZE-DOWNLOAD-CACHED] Starting organization for download with cached results...');
+    
+    const { classificationResults, sourceFiles } = req.body;
+
+    if (!Array.isArray(classificationResults) || classificationResults.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or empty cached classification results'
+      });
+    }
+
+    if (!Array.isArray(sourceFiles) || sourceFiles.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Source files information required'
+      });
+    }
+
+    console.log('[ORGANIZE-DOWNLOAD-CACHED] Creating downloadable ZIP with cached results...');
+    
+    // Create downloadable ZIP with organized files using cached results
+    const zipResult = await fileOrganizer.createDownloadableZipFromCached(
+      classificationResults,
+      sourceFiles
+    );
+
+    console.log('[ORGANIZE-DOWNLOAD-CACHED] ZIP created successfully:', zipResult.zipPath);
+    res.json({
+      success: true,
+      classification: {
+        success: true,
+        results: classificationResults
+      },
+      download: {
+        zipId: zipResult.zipId,
+        filename: zipResult.filename,
+        summary: zipResult.summary
+      }
+    });
+
+  } catch (error) {
+    console.error('[ORGANIZE-DOWNLOAD-CACHED] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: `Organization failed: ${error.message}`
+    });
+  }
+});
+
+// Download ZIP file endpoint
+app.get('/api/download/:zipId', async (req, res) => {
+  try {
+    const { zipId } = req.params;
+    console.log('[DOWNLOAD] Requested ZIP download:', zipId);
+    
+    const zipPath = path.join(__dirname, 'temp', 'zips', `${zipId}.zip`);
+    
+    // Check if ZIP file exists
+    if (!fs.existsSync(zipPath)) {
+      return res.status(404).json({
+        success: false,
+        error: 'ZIP file not found or expired'
+      });
+    }
+
+    const filename = `organized_documents_${zipId}.zip`;
+    
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(zipPath);
+    fileStream.pipe(res);
+    
+    // Clean up ZIP file after download
+    fileStream.on('end', () => {
+      console.log('[DOWNLOAD] ZIP file sent successfully, cleaning up...');
+      setTimeout(() => {
+        fs.unlink(zipPath, (err) => {
+          if (err) {
+            console.error('[DOWNLOAD] Error deleting ZIP file:', err);
+          } else {
+            console.log('[DOWNLOAD] ZIP file cleaned up:', zipPath);
+          }
+        });
+      }, 1000); // Small delay to ensure download completes
+    });
+
+    fileStream.on('error', (error) => {
+      console.error('[DOWNLOAD] Error streaming ZIP file:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error downloading file'
+      });
+    });
+
+  } catch (error) {
+    console.error('[DOWNLOAD] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Download failed'
     });
   }
 });
@@ -1320,6 +2248,9 @@ Classify PDF: http://localhost:${port}/api/classify
 Batch Classify (Base64): http://localhost:${port}/api/classify-batch-base64
 Batch Classify (Legacy): http://localhost:${port}/api/classify-batch
 Organize Documents: http://localhost:${port}/api/organize
+Organize & Download ZIP: http://localhost:${port}/api/organize-download
+Organize & Download ZIP (Cached): http://localhost:${port}/api/organize-download-cached
+Download ZIP: http://localhost:${port}/api/download/:zipId
 Preview Organization: http://localhost:${port}/api/organize-preview
 Health check: http://localhost:${port}/health
 
@@ -1327,11 +2258,13 @@ Features:
 Web-based PDF upload and parsing
 AI-powered document classification
 Automatic document organization
+Downloadable ZIP packages with organized files
 Batch processing support (Base64 & File Upload)
 REST API for programmatic access
 Text statistics and metadata extraction
 File size limit: 10MB per file
 No file uploads for Base64 endpoint
+Automatic cleanup of temporary files
 
 Press Ctrl+C to stop the server
   `);
