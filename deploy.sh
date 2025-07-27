@@ -117,8 +117,9 @@ deploy() {
     # Check if the application is running
     if curl -f http://localhost:3000/health &> /dev/null; then
         print_success "Application is running successfully!"
-        print_success "Access the application at: http://localhost"
-        print_success "Direct access (without Nginx): http://localhost:3000"
+        print_success "Access the application at: http://localhost:9005"
+        print_success "Direct access (without Nginx): http://localhost:9006"
+        print_success "HTTPS access: https://localhost:9443 (if SSL configured)"
     else
         print_error "Application failed to start properly"
         print_status "Checking logs..."
