@@ -98,6 +98,42 @@ create_directories() {
     print_success "Directories created"
 }
 
+# Function to build the application
+build() {
+    print_status "Building the PDF Text Parser application..."
+    
+    # Build the Docker image
+    print_status "Building Docker image..."
+    $COMPOSE_CMD build --no-cache
+    
+    print_success "Build completed successfully!"
+}
+
+# Function to start the application
+start() {
+    print_status "Starting the PDF Text Parser application..."
+    
+    # Start the services
+    print_status "Starting services..."
+    $COMPOSE_CMD up -d
+    
+    # Wait for the application to be ready
+    print_status "Waiting for application to be ready..."
+    sleep 10
+    
+    # Check if the application is running
+    if curl -f http://localhost:3000/health &> /dev/null; then
+        print_success "Application is running successfully!"
+        print_success "Access the application at: http://localhost:9005"
+        print_success "Direct access (without Nginx): http://localhost:9006"
+    else
+        print_error "Application failed to start properly"
+        print_status "Checking logs..."
+        $COMPOSE_CMD logs pdf-parser
+        exit 1
+    fi
+}
+
 # Function to build and start the application
 deploy() {
     print_status "Building and starting the PDF Text Parser application..."
@@ -196,6 +232,8 @@ show_help() {
     echo ""
     echo "Commands:"
     echo "  deploy    - Build and start the application (default)"
+    echo "  build     - Build the Docker image only"
+    echo "  start     - Start the application (containers must be built first)"
     echo "  logs      - Show application logs"
     echo "  stop      - Stop the application"
     echo "  restart   - Restart the application"
@@ -206,6 +244,8 @@ show_help() {
     echo ""
     echo "Examples:"
     echo "  $0 deploy    # Deploy the application"
+    echo "  $0 build     # Build Docker image"
+    echo "  $0 start     # Start the application"
     echo "  $0 logs      # View logs"
     echo "  $0 stop      # Stop the application"
 }
@@ -226,6 +266,17 @@ main() {
             setup_env
             create_directories
             deploy
+            ;;
+        build)
+            check_docker
+            check_docker_compose
+            setup_env
+            create_directories
+            build
+            ;;
+        start)
+            check_docker_compose
+            start
             ;;
         logs)
             check_docker_compose
