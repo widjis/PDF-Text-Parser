@@ -20,7 +20,6 @@
   "author": "Widji Santoso",
   "license": "MIT",
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.74",
     "archiver": "^7.0.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
@@ -30,10 +29,7 @@
     "openai": "^5.10.2",
     "path": "^0.12.7",
     "pdf-parse": "^1.1.1",
-    "pdf-poppler": "^0.2.1",
-    "pdf2pic": "^2.2.4",
-    "pdfjs-dist": "^5.3.93",
-    "tesseract.js": "^5.0.5"
+    "pdfjs-dist": "^5.3.93"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
