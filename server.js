@@ -53,11 +53,13 @@ app.use(express.static('public'));
 
 // Routes
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  // Redirect to the embedded HTML interface
+  res.redirect('/landing');
 });
 
 app.get('/test', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  // Redirect to the embedded HTML interface
+  res.redirect('/landing');
 });
 
 app.get('/landing', (req, res) => {
@@ -67,7 +69,7 @@ app.get('/landing', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lazy PDF Parser</title>
+    <title>Smart PDF Classifier</title>
     <style>
         * {
             margin: 0;
@@ -294,7 +296,7 @@ app.get('/landing', (req, res) => {
 <body>
     <div class="container">
         <div class="header">
-            <h1>Lazy PDF Parser</h1>
+            <h1>Smart PDF Classifier</h1>
             <p>Extract text from PDFs or classify documents with AI</p>
         </div>
         
@@ -305,6 +307,9 @@ app.get('/landing', (req, res) => {
             </button>
             <button class="tab-btn" onclick="showTab('classify')" id="classifyTab">
                 Classify Documents
+            </button>
+            <button class="tab-btn" onclick="showTab('watermark')" id="watermarkTab">
+                Watermark Tool
             </button>
         </div>
         
@@ -369,6 +374,93 @@ app.get('/landing', (req, res) => {
             
             <div class="result" id="classifyResult"></div>
         </div>
+        
+        <!-- Watermark Tool Tab -->
+        <div id="watermarkContent" class="tab-content">
+            <form id="watermarkForm" enctype="multipart/form-data">
+                <div class="upload-area" onclick="document.getElementById('watermarkFileInput').click()">
+                    <div class="upload-icon">WATERMARK</div>
+                    <div class="upload-text">Click to select PDF file(s) for watermarking</div>
+                    <div class="upload-subtext">or drag and drop here (max 10MB per file, up to 50 files)</div>
+                    <input type="file" id="watermarkFileInput" name="pdfs" accept=".pdf" multiple required>
+                </div>
+                
+                <div style="margin: 20px 0; text-align: center;">
+                    <label for="watermarkPreset" style="display: block; margin-bottom: 10px; color: #333; font-weight: bold;">
+                        Watermark Preset:
+                    </label>
+                    <select id="watermarkPreset" style="padding: 10px; border: 2px solid #667eea; border-radius: 8px; font-size: 1em; background: white; min-width: 200px;">
+                        <option value="">Loading presets...</option>
+                    </select>
+                </div>
+                
+                <div id="customWatermarkOptions" style="margin: 20px 0; padding: 20px; border: 2px solid #e0e0e0; border-radius: 8px; background: #f9f9f9;">
+                    <h3 style="margin-top: 0; color: #333;">Watermark Customization</h3>
+                    <p style="margin: 0 0 15px 0; color: #666; font-size: 0.9em;">Customize your watermark appearance. When using a preset, these options will override the preset defaults.</p>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label for="customText" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Text:</label>
+                        <input type="text" id="customText" placeholder="Enter watermark text or use preset" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label for="opacity" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Opacity: <span id="opacityValue">0.3</span></label>
+                        <input type="range" id="opacity" min="0.1" max="1" step="0.1" value="0.3" style="width: 100%;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label for="fontSize" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Font Size:</label>
+                        <input type="number" id="fontSize" value="48" min="12" max="200" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label for="color" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Color:</label>
+                        <input type="color" id="color" value="#ff0000" style="width: 100%; height: 40px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 10px; color: #333; font-weight: bold;">Position Control:</label>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <label for="positionX" style="display: block; margin-bottom: 5px; color: #555; font-size: 14px;">Horizontal Position (0% = Left, 50% = Center, 100% = Right):</label>
+                            <input type="range" id="positionX" min="0" max="100" value="50" style="width: 100%; margin-bottom: 5px;">
+                            <span id="positionXValue" style="font-size: 12px; color: #666;">50%</span>
+                        </div>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <label for="positionY" style="display: block; margin-bottom: 5px; color: #555; font-size: 14px;">Vertical Position (0% = Bottom, 50% = Middle, 100% = Top):</label>
+                            <input type="range" id="positionY" min="0" max="100" value="50" style="width: 100%; margin-bottom: 5px;">
+                            <span id="positionYValue" style="font-size: 12px; color: #666;">50%</span>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button type="button" onclick="setQuickPosition(50, 50)" style="flex: 1; padding: 5px; font-size: 12px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">Center</button>
+                            <button type="button" onclick="setQuickPosition(0, 100)" style="flex: 1; padding: 5px; font-size: 12px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">Top-Left</button>
+                            <button type="button" onclick="setQuickPosition(100, 100)" style="flex: 1; padding: 5px; font-size: 12px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">Top-Right</button>
+                            <button type="button" onclick="setQuickPosition(0, 0)" style="flex: 1; padding: 5px; font-size: 12px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">Bottom-Left</button>
+                            <button type="button" onclick="setQuickPosition(100, 0)" style="flex: 1; padding: 5px; font-size: 12px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">Bottom-Right</button>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label for="rotation" style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">Rotation (degrees):</label>
+                        <input type="number" id="rotation" value="45" min="-180" max="180" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                </div>
+                
+                <div style="text-align: center;">
+                    <button type="submit" class="btn">Add Watermark</button>
+                    <button type="button" class="btn" onclick="clearWatermarkResult()">Clear</button>
+                </div>
+            </form>
+            
+            <div class="loading" id="watermarkLoading">
+                <div class="spinner"></div>
+                <p>Adding watermark...</p>
+            </div>
+            
+            <div class="result" id="watermarkResult"></div>
+        </div>
     </div>
 
     <script>
@@ -376,14 +468,18 @@ app.get('/landing', (req, res) => {
         function showTab(tabName) {
             const extractTab = document.getElementById('extractTab');
             const classifyTab = document.getElementById('classifyTab');
+            const watermarkTab = document.getElementById('watermarkTab');
             const extractContent = document.getElementById('extractContent');
             const classifyContent = document.getElementById('classifyContent');
+            const watermarkContent = document.getElementById('watermarkContent');
             
             // Remove active class from all tabs and content
             extractTab.classList.remove('active');
             classifyTab.classList.remove('active');
+            watermarkTab.classList.remove('active');
             extractContent.classList.remove('active');
             classifyContent.classList.remove('active');
+            watermarkContent.classList.remove('active');
             
             // Add active class to selected tab and content
             if (tabName === 'extract') {
@@ -392,6 +488,10 @@ app.get('/landing', (req, res) => {
             } else if (tabName === 'classify') {
                 classifyTab.classList.add('active');
                 classifyContent.classList.add('active');
+            } else if (tabName === 'watermark') {
+                watermarkTab.classList.add('active');
+                watermarkContent.classList.add('active');
+                loadWatermarkPresets(); // Load presets when watermark tab is shown
             }
         }
         
@@ -1261,6 +1361,301 @@ app.get('/landing', (req, res) => {
                 
                 showClassifyResult(errorMessage, 'error');
             }
+        }
+        
+        // Watermark functionality
+        const watermarkForm = document.getElementById('watermarkForm');
+        const watermarkFileInput = document.getElementById('watermarkFileInput');
+        const watermarkLoading = document.getElementById('watermarkLoading');
+        const watermarkResult = document.getElementById('watermarkResult');
+        const watermarkPreset = document.getElementById('watermarkPreset');
+        const opacitySlider = document.getElementById('opacity');
+        const opacityValue = document.getElementById('opacityValue');
+        
+        // Update opacity display
+        opacitySlider.addEventListener('input', function() {
+            opacityValue.textContent = this.value;
+        });
+        
+        // Position slider controls
+        const positionXSlider = document.getElementById('positionX');
+        const positionYSlider = document.getElementById('positionY');
+        const positionXValue = document.getElementById('positionXValue');
+        const positionYValue = document.getElementById('positionYValue');
+        
+        // Update position display values
+        positionXSlider.addEventListener('input', function() {
+            positionXValue.textContent = this.value + '%';
+        });
+        
+        positionYSlider.addEventListener('input', function() {
+            positionYValue.textContent = this.value + '%';
+        });
+        
+        // Quick position function
+        function setQuickPosition(x, y) {
+            positionXSlider.value = x;
+            positionYSlider.value = y;
+            positionXValue.textContent = x + '%';
+            positionYValue.textContent = y + '%';
+        }
+        
+        // Load watermark presets
+        async function loadWatermarkPresets() {
+            try {
+                const response = await fetch('/api/watermark/presets');
+                const data = await response.json();
+                
+                if (data.success && data.presets) {
+                    watermarkPreset.innerHTML = '<option value="">Custom Watermark</option>';
+                    
+                    Object.entries(data.presets).forEach(([key, preset]) => {
+                        const option = document.createElement('option');
+                        option.value = key;
+                        option.textContent = key.toUpperCase() + ' - ' + preset.text;
+                        watermarkPreset.appendChild(option);
+                    });
+                } else {
+                    watermarkPreset.innerHTML = '<option value="">Error loading presets</option>';
+                }
+            } catch (error) {
+                console.error('Error loading watermark presets:', error);
+                watermarkPreset.innerHTML = '<option value="">Error loading presets</option>';
+            }
+        }
+        
+        // Handle preset selection
+        watermarkPreset.addEventListener('change', async function() {
+            const customOptions = document.getElementById('customWatermarkOptions');
+            // Always show customization options
+            customOptions.style.display = 'block';
+            
+            if (this.value !== '') {
+                // Preset selected - populate fields with preset values
+                try {
+                    const response = await fetch('/api/watermark/presets');
+                    const data = await response.json();
+                    
+                    if (data.success && data.presets && data.presets[this.value]) {
+                        const preset = data.presets[this.value];
+                        
+                        // Populate form fields with preset values
+                        document.getElementById('customText').value = preset.text;
+                        document.getElementById('opacity').value = preset.opacity;
+                        document.getElementById('opacityValue').textContent = preset.opacity;
+                        document.getElementById('fontSize').value = preset.fontSize;
+                        document.getElementById('rotation').value = preset.rotation;
+                        
+                        // Convert RGB to hex for color input
+                        const hexColor = '#' + 
+                            Math.round(preset.color.r * 255).toString(16).padStart(2, '0') +
+                            Math.round(preset.color.g * 255).toString(16).padStart(2, '0') +
+                            Math.round(preset.color.b * 255).toString(16).padStart(2, '0');
+                        document.getElementById('color').value = hexColor;
+                        
+                        // Set position sliders to center (default)
+                        document.getElementById('positionX').value = '50';
+                        document.getElementById('positionY').value = '50';
+                        document.getElementById('positionXValue').textContent = '50%';
+                        document.getElementById('positionYValue').textContent = '50%';
+                    }
+                } catch (error) {
+                    console.error('Error loading preset details:', error);
+                }
+            } else {
+                // Custom watermark - reset to defaults
+                document.getElementById('customText').value = '';
+                document.getElementById('opacity').value = '0.3';
+                document.getElementById('opacityValue').textContent = '0.3';
+                document.getElementById('fontSize').value = '48';
+                document.getElementById('color').value = '#ff0000';
+                document.getElementById('positionX').value = '50';
+                document.getElementById('positionY').value = '50';
+                document.getElementById('positionXValue').textContent = '50%';
+                document.getElementById('positionYValue').textContent = '50%';
+                document.getElementById('rotation').value = '45';
+            }
+        });
+        
+        // Watermark form submission
+        watermarkForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const files = watermarkFileInput.files;
+            if (!files || files.length === 0) {
+                showWatermarkResult('Please select at least one PDF file', 'error');
+                return;
+            }
+            
+            watermarkLoading.style.display = 'block';
+            watermarkResult.style.display = 'none';
+            
+            try {
+                const formData = new FormData();
+                
+                // Add all selected files
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('pdfs', files[i]);
+                }
+                
+                const preset = watermarkPreset.value;
+                const customText = document.getElementById('customText').value;
+                
+                // Validate that we have either a preset or custom text
+                if (!preset && !customText.trim()) {
+                    showWatermarkResult('Please enter watermark text or select a preset', 'error');
+                    watermarkLoading.style.display = 'none';
+                    return;
+                }
+                
+                // Always send preset if selected (for base settings)
+                if (preset) {
+                    formData.append('preset', preset);
+                }
+                
+                // Always send custom options (they will override preset values if provided)
+                formData.append('customText', customText);
+                formData.append('opacity', document.getElementById('opacity').value);
+                formData.append('fontSize', document.getElementById('fontSize').value);
+                formData.append('color', document.getElementById('color').value);
+                formData.append('positionX', document.getElementById('positionX').value);
+                formData.append('positionY', document.getElementById('positionY').value);
+                formData.append('rotation', document.getElementById('rotation').value);
+                
+                const response = await fetch('/api/watermark', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    
+                    if (contentType && contentType.includes('application/pdf')) {
+                        // Single file - handle direct PDF download
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'watermarked_' + files[0].name;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        
+                        showWatermarkResult('✅ Watermark added successfully! File downloaded.', 'success');
+                    } else {
+                        // Multiple files - handle ZIP download response
+                        const data = await response.json();
+                        
+                        if (data.success && data.download) {
+                             let resultHtml = '<h3>✅ Watermark Processing Complete!</h3>';
+                             resultHtml += '<p><strong>Successfully processed:</strong> ' + data.successfulFiles + ' out of ' + data.totalFiles + ' files</p>';
+                             
+                             if (data.failedFiles > 0) {
+                                 resultHtml += '<p style="color: #e74c3c;"><strong>Failed:</strong> ' + data.failedFiles + ' files</p>';
+                                 if (data.errors) {
+                                     resultHtml += '<div style="margin: 10px 0; padding: 10px; background: #ffeaa7; border-radius: 5px;">';
+                                     resultHtml += '<strong>Errors:</strong><ul>';
+                                     data.errors.forEach(function(error) {
+                                         resultHtml += '<li>' + error.filename + ': ' + error.error + '</li>';
+                                     });
+                                     resultHtml += '</ul></div>';
+                                 }
+                             }
+                             
+                             const downloadUrl = data.download.downloadUrl;
+                             resultHtml += '<div style="margin: 20px 0; text-align: center;">';
+                             resultHtml += '<a href="' + downloadUrl + '" download="' + data.download.filename + '" class="btn" style="background: #28a745; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; display: inline-block;">';
+                             resultHtml += '⬇️ Download Watermarked Files (ZIP)</a>';
+                             resultHtml += '</div>';
+                             
+                             resultHtml += '<p style="color: #666; font-size: 0.9em; margin-top: 15px;">💡 The ZIP file will be automatically deleted after download for security.</p>';
+                             
+                             showWatermarkResult(resultHtml, 'success');
+                         } else {
+                             showWatermarkResult('Error: ' + (data.error || 'Failed to process watermark'), 'error');
+                         }
+                    }
+                } else {
+                    const errorData = await response.json();
+                    showWatermarkResult('Error: ' + (errorData.error || 'Failed to add watermark'), 'error');
+                }
+            } catch (error) {
+                console.error('Watermark error:', error);
+                showWatermarkResult('Error: ' + error.message, 'error');
+            } finally {
+                watermarkLoading.style.display = 'none';
+            }
+        });
+        
+        function showWatermarkResult(content, type) {
+            watermarkResult.innerHTML = content;
+            watermarkResult.className = 'result ' + type;
+            watermarkResult.style.display = 'block';
+        }
+        
+        function clearWatermarkResult() {
+            watermarkResult.style.display = 'none';
+            watermarkFileInput.value = '';
+            watermarkPreset.value = '';
+            document.getElementById('customText').value = '';
+            document.getElementById('opacity').value = '0.3';
+            document.getElementById('opacityValue').textContent = '0.3';
+            document.getElementById('fontSize').value = '48';
+            document.getElementById('color').value = '#ff0000';
+            document.getElementById('rotation').value = '45';
+            document.getElementById('customWatermarkOptions').style.display = 'block';
+            document.querySelector('#watermarkContent .upload-text').textContent = 'Click to select PDF file for watermarking';
+        }
+        
+        // Drag and drop for watermark
+        const watermarkUploadArea = document.querySelector('#watermarkContent .upload-area');
+        
+        watermarkUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            watermarkUploadArea.classList.add('dragover');
+        });
+        
+        watermarkUploadArea.addEventListener('dragleave', () => {
+            watermarkUploadArea.classList.remove('dragover');
+        });
+        
+        watermarkUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            watermarkUploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            const pdfFiles = Array.from(files).filter(file => file.type === 'application/pdf');
+            
+            if (pdfFiles.length > 0) {
+                // Create a new FileList with only PDF files
+                const dt = new DataTransfer();
+                pdfFiles.forEach(file => dt.items.add(file));
+                watermarkFileInput.files = dt.files;
+                
+                if (pdfFiles.length === 1) {
+                    updateWatermarkFileName(pdfFiles[0].name);
+                } else {
+                    updateWatermarkFileName(pdfFiles.length + ' PDF files selected');
+                }
+            } else {
+                updateWatermarkFileName('No PDF files found. Please drop PDF files only.');
+            }
+        });
+        
+        watermarkFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                if (e.target.files.length === 1) {
+                    updateWatermarkFileName(e.target.files[0].name);
+                } else {
+                    updateWatermarkFileName(e.target.files.length + ' PDF files selected');
+                }
+            }
+        });
+        
+        function updateWatermarkFileName(fileName) {
+            const uploadText = document.querySelector('#watermarkContent .upload-text');
+            uploadText.textContent = fileName;
         }
     </script>
 </body>
@@ -2258,29 +2653,24 @@ app.get('/api/watermark/presets', (req, res) => {
   }
 });
 
-// Add watermark to PDF
-app.post('/api/watermark', upload.single('pdf'), async (req, res) => {
+// Add watermark to PDF - supports single and multiple files
+app.post('/api/watermark', upload.array('pdfs', 50), async (req, res) => {
   try {
     console.log('🔖 [WATERMARK API] Starting watermark request');
     
-    if (!req.file) {
+    if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No PDF file provided'
+        error: 'No PDF files provided'
       });
     }
     
-    const { preset, customText, opacity, fontSize, color, rotation } = req.body;
+    console.log(`🔖 [WATERMARK API] Processing ${req.files.length} file(s)`);
     
-    console.log('📄 [WATERMARK API] File:', req.file.originalname);
-    console.log('📁 [WATERMARK API] File path:', req.file.path);
-    console.log('📊 [WATERMARK API] File info:', {
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-      path: req.file.path
-    });
-    console.log('⚙️ [WATERMARK API] Options:', { preset, customText, opacity, fontSize, color, rotation });
+    const { preset, customText, opacity, fontSize, color, rotation, positionX, positionY } = req.body;
+    
+    console.log('📄 [WATERMARK API] Files:', req.files.map(f => f.originalname));
+    console.log('⚙️ [WATERMARK API] Options:', { preset, customText, opacity, fontSize, color, rotation, positionX, positionY });
     
     // Prepare watermark options
     const watermarkOptions = {
@@ -2289,7 +2679,9 @@ app.post('/api/watermark', upload.single('pdf'), async (req, res) => {
       opacity: opacity ? parseFloat(opacity) : undefined,
       fontSize: fontSize ? parseInt(fontSize) : undefined,
       color: color,
-      rotation: rotation ? parseInt(rotation) : undefined
+      rotation: rotation ? parseInt(rotation) : undefined,
+      positionX: positionX ? parseInt(positionX) : undefined,
+      positionY: positionY ? parseInt(positionY) : undefined
     };
     
     // Validate options
@@ -2302,58 +2694,149 @@ app.post('/api/watermark', upload.single('pdf'), async (req, res) => {
       });
     }
     
-    // Read file buffer from disk (since we're using diskStorage)
-    let pdfBuffer;
-    try {
-      console.log('📖 [WATERMARK API] Attempting to read file from:', req.file.path);
-      pdfBuffer = fs.readFileSync(req.file.path);
-      console.log(`📊 [WATERMARK API] File buffer read successfully. Size: ${pdfBuffer.length} bytes`);
-    } catch (readError) {
-      console.error('❌ [WATERMARK API] Error reading file:', readError.message);
+    // Process all files
+    const watermarkedFiles = [];
+    const errors = [];
+    
+    for (let i = 0; i < req.files.length; i++) {
+      const file = req.files[i];
+      try {
+        console.log(`📖 [WATERMARK API] Processing file ${i + 1}/${req.files.length}: ${file.originalname}`);
+        
+        // Read file buffer from disk
+        const pdfBuffer = fs.readFileSync(file.path);
+        console.log(`📊 [WATERMARK API] File buffer read successfully. Size: ${pdfBuffer.length} bytes`);
+        
+        // Add watermark
+        const result = await watermarkProcessor.addWatermark(pdfBuffer, watermarkOptions);
+        
+        if (result.success) {
+          console.log(`✅ [WATERMARK API] Watermark added successfully to ${file.originalname}`);
+          console.log('📊 [WATERMARK API] Original size:', result.originalSize, 'bytes');
+          console.log('📊 [WATERMARK API] Watermarked size:', result.watermarkedSize, 'bytes');
+          
+          // Generate filename
+          const nameWithoutExt = file.originalname.replace(/\.pdf$/i, '');
+          const watermarkedFilename = `${nameWithoutExt}_watermarked.pdf`;
+          
+          watermarkedFiles.push({
+            originalName: file.originalname,
+            watermarkedName: watermarkedFilename,
+            buffer: result.buffer,
+            originalSize: result.originalSize,
+            watermarkedSize: result.watermarkedSize
+          });
+        } else {
+          console.error(`❌ [WATERMARK API] Watermark failed for ${file.originalname}:`, result.error);
+          errors.push({
+            filename: file.originalname,
+            error: result.error
+          });
+        }
+        
+      } catch (fileError) {
+        console.error(`❌ [WATERMARK API] Error processing ${file.originalname}:`, fileError.message);
+        errors.push({
+          filename: file.originalname,
+          error: fileError.message
+        });
+      }
+    }
+    
+    // Clean up uploaded files
+    req.files.forEach(file => {
+      fs.unlink(file.path, (err) => {
+        if (err) console.error('Error deleting temp file:', err);
+      });
+    });
+    
+    if (watermarkedFiles.length === 0) {
       return res.status(500).json({
         success: false,
-        error: 'Failed to read uploaded file'
+        error: 'Failed to process any files',
+        errors: errors
       });
     }
     
-    // Add watermark
-    const result = await watermarkProcessor.addWatermark(pdfBuffer, watermarkOptions);
-    
-    if (result.success) {
-      console.log('✅ [WATERMARK API] Watermark added successfully');
-      console.log('📊 [WATERMARK API] Original size:', result.originalSize, 'bytes');
-      console.log('📊 [WATERMARK API] Watermarked size:', result.watermarkedSize, 'bytes');
-      
-      // Generate filename
-      const originalName = req.file.originalname;
-      const nameWithoutExt = originalName.replace(/\.pdf$/i, '');
-      const watermarkedFilename = `${nameWithoutExt}_watermarked.pdf`;
+    // If only one file, return it directly
+    if (watermarkedFiles.length === 1) {
+      const file = watermarkedFiles[0];
       
       // Set headers for file download
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${watermarkedFilename}"`);
-      res.setHeader('Content-Length', result.buffer.length);
+      res.setHeader('Content-Disposition', `attachment; filename="${file.watermarkedName}"`);
+      res.setHeader('Content-Length', file.buffer.length);
       
       // Send the watermarked PDF
-      res.send(result.buffer);
+      res.send(file.buffer);
       
-    } else {
-      console.error('❌ [WATERMARK API] Watermark failed:', result.error);
-      res.status(500).json({
-        success: false,
-        error: result.error
-      });
+      console.log('✅ [WATERMARK API] Single file watermark completed successfully');
+      return;
     }
     
-    // Clean up uploaded file
-    if (req.file.path) {
-      fs.unlink(req.file.path, (err) => {
-        if (err) console.error('Error deleting temp file:', err);
-      });
+    // Multiple files - create ZIP
+    console.log('📦 [WATERMARK API] Creating ZIP for multiple watermarked files...');
+    
+    const archiver = require('archiver');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const zipId = `watermark_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const zipFilename = `watermarked_files_${timestamp}.zip`;
+    
+    // Create temp downloads directory
+    const downloadDir = path.join(__dirname, 'temp', 'zips');
+    if (!fs.existsSync(downloadDir)) {
+      fs.mkdirSync(downloadDir, { recursive: true });
     }
+    
+    const zipPath = path.join(downloadDir, `${zipId}.zip`);
+    const output = fs.createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    
+    archive.pipe(output);
+    
+    // Add each watermarked file to the ZIP
+    watermarkedFiles.forEach(file => {
+      archive.append(file.buffer, { name: file.watermarkedName });
+    });
+    
+    await archive.finalize();
+    
+    // Wait for ZIP creation to complete
+    await new Promise((resolve, reject) => {
+      output.on('close', resolve);
+      output.on('error', reject);
+    });
+    
+    console.log('✅ [WATERMARK API] ZIP created successfully:', zipPath);
+    
+    // Return ZIP download information
+    res.json({
+      success: true,
+      message: `Successfully watermarked ${watermarkedFiles.length} files`,
+      totalFiles: req.files.length,
+      successfulFiles: watermarkedFiles.length,
+      failedFiles: errors.length,
+      errors: errors.length > 0 ? errors : undefined,
+      download: {
+        zipId: zipId,
+        filename: zipFilename,
+        downloadUrl: `/api/download/${zipId}`,
+        fileCount: watermarkedFiles.length
+      }
+    });
     
   } catch (error) {
     console.error('❌ [WATERMARK API] Unexpected error:', error.message);
+    
+    // Clean up uploaded files on error
+    if (req.files) {
+      req.files.forEach(file => {
+        fs.unlink(file.path, (err) => {
+          if (err) console.error('Error cleaning up file:', err);
+        });
+      });
+    }
+    
     res.status(500).json({
       success: false,
       error: 'Internal server error during watermark processing'
