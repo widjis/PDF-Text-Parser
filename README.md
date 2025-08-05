@@ -1,6 +1,6 @@
-# PDF Text Parser & Classifier
+# PDF Text Parser, Classifier & Watermark Tool
 
-A powerful Node.js application for extracting text from PDF files using multiple OCR engines and AI-powered document classification.
+A comprehensive Node.js application for extracting text from PDF files using multiple OCR engines, AI-powered document classification, and PDF watermarking capabilities.
 
 ## 🚀 Features
 
@@ -25,8 +25,15 @@ A powerful Node.js application for extracting text from PDF files using multiple
 - **OOPR**: Out of Policy Request (Exception/special requests)
 - **SRF**: SRF Scan (Service Request Forms)
 
+### PDF Watermarking
+- **🔖 Multiple Presets**: Pre-configured watermark styles (Confidential, Draft, Sample, etc.)
+- **🎨 Custom Watermarks**: Create custom text watermarks with full control
+- **⚙️ Advanced Options**: Opacity, font size, color, rotation, and positioning
+- **📥 Instant Download**: Watermarked PDFs are automatically downloaded
+- **🔒 Secure Processing**: Files are processed in memory and automatically cleaned up
+
 ### Additional Features
-- **Web Interface**: Modern Express.js server with file upload functionality
+- **Web Interface**: Modern tabbed interface with separate tools for parsing and watermarking
 - **CLI Support**: Command-line interface for batch processing
 - **Multiple Output Formats**: Plain text, JSON, structured data
 
@@ -118,12 +125,74 @@ parser.parseFile('path/to/file.pdf')
 
 ## 🔧 API Endpoints
 
+### PDF Parsing
 - `POST /parse` - Parse single PDF file
 - `POST /parse-multiple` - Parse multiple PDF files
+- `POST /upload` - Upload and parse PDF with OCR method selection
+
+### Document Classification
 - `POST /classify` - Classify documents (Coming Soon)
 - `POST /organize` - Organize classified documents (Coming Soon)
-- `GET /` - Web interface for file upload
+
+### PDF Watermarking
+- `GET /api/watermark/presets` - Get available watermark presets
+- `POST /api/watermark` - Add watermark to PDF file
+
+### General
+- `GET /` - Web interface with tabbed tools
+- `GET /test` - Test form interface
 - `GET /health` - Health check endpoint
+
+### Watermark API Usage
+
+#### Get Available Presets
+```bash
+curl -X GET http://localhost:3000/api/watermark/presets
+```
+
+Response:
+```json
+{
+  "success": true,
+  "presets": {
+    "confidential": {
+      "text": "CONFIDENTIAL",
+      "opacity": 0.3,
+      "fontSize": 48,
+      "color": "#FF0000",
+      "rotation": 45
+    },
+    "draft": {
+      "text": "DRAFT",
+      "opacity": 0.4,
+      "fontSize": 36,
+      "color": "#808080",
+      "rotation": 0
+    }
+  },
+  "presetNames": ["confidential", "draft", "sample", "copy", "approved"]
+}
+```
+
+#### Add Watermark to PDF
+```bash
+curl -X POST http://localhost:3000/api/watermark \
+  -F "pdf=@document.pdf" \
+  -F "preset=confidential" \
+  -F "customText=My Custom Text"
+```
+
+#### Custom Watermark Options
+```bash
+curl -X POST http://localhost:3000/api/watermark \
+  -F "pdf=@document.pdf" \
+  -F "preset=custom" \
+  -F "customText=CUSTOM WATERMARK" \
+  -F "opacity=0.5" \
+  -F "fontSize=32" \
+  -F "color=#0000FF" \
+  -F "rotation=30"
+```
 
 ## 🤝 Contributing
 

@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Tools - Parser, Classifier & Watermark</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; margin: 0; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: #667eea; color: white; padding: 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; }
+        
+        /* Tab Navigation */
+        .tab-nav { display: flex; background: #f8f9fa; border-bottom: 1px solid #dee2e6; }
+        .tab-btn { flex: 1; padding: 15px 20px; background: none; border: none; cursor: pointer; font-size: 16px; transition: all 0.3s; }
+        .tab-btn.active { background: white; border-bottom: 3px solid #667eea; color: #667eea; font-weight: bold; }
+        .tab-btn:hover:not(.active) { background: #e9ecef; }
+        
+        /* Tab Content */
+        .tab-content { display: none; padding: 30px; }
+        .tab-content.active { display: block; }
+        
+        /* Form Styles */
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #333; }
+        .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; box-sizing: border-box; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2); }
+        
+        .form-row { display: flex; gap: 15px; }
+        .form-row .form-group { flex: 1; }
+        
+        .btn { padding: 12px 24px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background 0.3s; }
+        .btn:hover { background: #5a6fd8; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .result { margin-top: 20px; padding: 15px; border-radius: 5px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .loading { display: none; text-align: center; margin: 20px 0; color: #667eea; }
+        
+        .preset-info { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 10px; font-size: 14px; color: #666; }
+        .custom-options { margin-top: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #fafafa; }
+        
+        /* Classification Results Styles */
+        .metadata { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .metadata h4 { margin: 0 0 10px 0; color: #333; }
+        .metadata-item { margin: 5px 0; }
+        .classification-results { margin-top: 20px; }
+        .classification-item { background: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin: 10px 0; }
+        .classification-item.success { border-left: 4px solid #28a745; }
+        .classification-item.error { border-left: 4px solid #dc3545; }
+        .classification-item div { margin: 5px 0; }
+        .file-info { font-size: 16px; font-weight: bold; color: #333; }
+        .category-info { color: #667eea; font-weight: bold; }
+        .confidence-info { color: #28a745; }
+        .requester-info { color: #6c757d; }
+        .error-info { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>PDF Tools - Parser, Classifier & Watermark</h1>
+        </div>
+        
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('parser')">📄 PDF Parser</button>
+            <button class="tab-btn" onclick="switchTab('classify')">🗂️ Classify Documents</button>
+            <button class="tab-btn" onclick="switchTab('watermark')">🔖 Add Watermark</button>
+        </div>
+        
+        <!-- PDF Parser Tab -->
+        <div id="parser-tab" class="tab-content active">
+            <form id="testForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="fileInput">Select PDF file:</label>
+                    <input type="file" id="fileInput" name="pdf" accept=".pdf" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="ocrMethod">OCR Method:</label>
+                    <select id="ocrMethod" name="ocrMethod">
+                        <option value="tesseract">Tesseract (Offline)</option>
+                        <option value="openai">OpenAI Vision (Online)</option>
+                        <option value="openai-responses">OpenAI Responses API (Direct PDF)</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn">Parse PDF</button>
+            </form>
+            
+            <div class="loading" id="loading">
+                <p>Processing PDF...</p>
+            </div>
+            
+            <div class="result" id="result" style="display: none;"></div>
+        </div>
+        
+        <!-- PDF Classification Tab -->
+        <div id="classify-tab" class="tab-content">
+            <form id="classifyForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="classifyFileInput">Select PDF files for classification:</label>
+                    <input type="file" id="classifyFileInput" name="pdfs" accept=".pdf" multiple required>
+                    <small style="color: #666; display: block; margin-top: 5px;">You can select multiple PDF files (max 10MB each)</small>
+                </div>
+                
+                <button type="submit" class="btn">Classify Documents</button>
+            </form>
+            
+            <div class="loading" id="classifyLoading" style="display: none;">
+                <p>Classifying documents...</p>
+            </div>
+            
+            <div class="result" id="classifyResult" style="display: none;"></div>
+        </div>
+        
+        <!-- Watermark Tab -->
+        <div id="watermark-tab" class="tab-content">
+            <form id="watermarkForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="watermarkFileInput">Select PDF file:</label>
+                    <input type="file" id="watermarkFileInput" name="pdf" accept=".pdf" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="presetSelect">Watermark Preset:</label>
+                    <select id="presetSelect" name="preset" onchange="handlePresetChange()">
+                        <option value="">Loading presets...</option>
+                    </select>
+                    <div id="presetInfo" class="preset-info" style="display: none;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="customText">Custom Text (optional):</label>
+                    <input type="text" id="customText" name="customText" placeholder="Enter custom watermark text">
+                </div>
+                
+                <div class="custom-options" id="customOptions" style="display: none;">
+                    <h4>Custom Options</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="opacity">Opacity (0.1-1.0):</label>
+                            <input type="number" id="opacity" name="opacity" min="0.1" max="1.0" step="0.1" placeholder="0.3">
+                        </div>
+                        <div class="form-group">
+                            <label for="fontSize">Font Size:</label>
+                            <input type="number" id="fontSize" name="fontSize" min="8" max="72" placeholder="24">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="color">Color:</label>
+                            <input type="text" id="color" name="color" placeholder="#FF0000 or red">
+                        </div>
+                        <div class="form-group">
+                            <label for="rotation">Rotation (degrees):</label>
+                            <input type="number" id="rotation" name="rotation" min="-180" max="180" placeholder="45">
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn">Add Watermark</button>
+            </form>
+            
+            <div class="loading" id="watermarkLoading">
+                <p>Adding watermark...</p>
+            </div>
+            
+            <div class="result" id="watermarkResult" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        console.log('PDF Tools script loaded');
+        
+        // Global variables
+        let watermarkPresets = {};
+        
+        // Tab switching functionality
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            // Add active class to clicked tab button
+            event.target.classList.add('active');
+            
+            console.log('Switched to tab:', tabName);
+        }
+        
+        // Load watermark presets on page load
+        async function loadWatermarkPresets() {
+            try {
+                console.log('Loading watermark presets...');
+                const response = await fetch('/api/watermark/presets');
+                const data = await response.json();
+                
+                if (data.success) {
+                    watermarkPresets = data.presets;
+                    const presetSelect = document.getElementById('presetSelect');
+                    presetSelect.innerHTML = '<option value="">Select a preset...</option>';
+                    
+                    data.presetNames.forEach(name => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+                        presetSelect.appendChild(option);
+                    });
+                    
+                    // Add custom option
+                    const customOption = document.createElement('option');
+                    customOption.value = 'custom';
+                    customOption.textContent = 'Custom Settings';
+                    presetSelect.appendChild(customOption);
+                    
+                    console.log('Watermark presets loaded successfully');
+                } else {
+                    console.error('Failed to load presets:', data.error);
+                    document.getElementById('presetSelect').innerHTML = '<option value="">Failed to load presets</option>';
+                }
+            } catch (error) {
+                console.error('Error loading presets:', error);
+                document.getElementById('presetSelect').innerHTML = '<option value="">Error loading presets</option>';
+            }
+        }
+        
+        // Handle preset selection change
+        function handlePresetChange() {
+            const presetSelect = document.getElementById('presetSelect');
+            const presetInfo = document.getElementById('presetInfo');
+            const customOptions = document.getElementById('customOptions');
+            const selectedPreset = presetSelect.value;
+            
+            if (selectedPreset === 'custom') {
+                presetInfo.style.display = 'none';
+                customOptions.style.display = 'block';
+            } else if (selectedPreset && watermarkPresets[selectedPreset]) {
+                const preset = watermarkPresets[selectedPreset];
+                presetInfo.innerHTML = `
+                    <strong>Preset Details:</strong><br>
+                    Text: ${preset.text}<br>
+                    Opacity: ${preset.opacity}<br>
+                    Font Size: ${preset.fontSize}px<br>
+                    Color: ${preset.color}<br>
+                    Rotation: ${preset.rotation}°
+                `;
+                presetInfo.style.display = 'block';
+                customOptions.style.display = 'none';
+            } else {
+                presetInfo.style.display = 'none';
+                customOptions.style.display = 'none';
+            }
+        }
+        
+        // PDF Parser form handling
+        const form = document.getElementById('testForm');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('PDF Parser form submitted');
+            
+            const formData = new FormData();
+            const file = document.getElementById('fileInput').files[0];
+            const ocrMethod = document.getElementById('ocrMethod').value;
+            
+            if (!file) {
+                showResult('Please select a PDF file', 'error', 'result');
+                return;
+            }
+            
+            console.log('File selected:', file.name, 'OCR method:', ocrMethod);
+            
+            formData.append('pdf', file);
+            formData.append('ocrMethod', ocrMethod);
+            
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            
+            try {
+                console.log('Sending request to /upload');
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Response received:', response.status);
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (data.success) {
+                    showResult(`Success! Extracted ${data.text.length} characters using ${data.method}`, 'success', 'result');
+                } else {
+                    showResult('Error: ' + data.error, 'error', 'result');
+                }
+            } catch (error) {
+                console.error('Request failed:', error);
+                showResult('Upload failed: ' + error.message, 'error', 'result');
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+        
+        // Classification form handling
+        const classifyForm = document.getElementById('classifyForm');
+        const classifyLoading = document.getElementById('classifyLoading');
+        const classifyResult = document.getElementById('classifyResult');
+        
+        classifyForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Classification form submitted');
+            
+            const files = document.getElementById('classifyFileInput').files;
+            
+            if (files.length === 0) {
+                showResult('Please select PDF files for classification', 'error', 'classifyResult');
+                return;
+            }
+            
+            console.log('Files selected for classification:', files.length);
+            
+            classifyLoading.style.display = 'block';
+            classifyResult.style.display = 'none';
+            
+            try {
+                // Convert files to base64 for batch processing
+                console.log('Converting files to base64...');
+                const filesData = [];
+                
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const base64 = await fileToBase64(file);
+                    filesData.push({
+                        filename: file.name,
+                        data: base64,
+                        size: file.size
+                    });
+                }
+                
+                console.log('Sending batch classification request...');
+                const response = await fetch('/api/classify-batch', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        files: filesData
+                    })
+                });
+                
+                console.log('Classification response received:', response.status);
+                const data = await response.json();
+                console.log('Classification data:', data);
+                
+                if (data.success) {
+                    showClassificationResult(data);
+                } else {
+                    showResult('Classification Error: ' + data.error, 'error', 'classifyResult');
+                }
+            } catch (error) {
+                console.error('Classification request failed:', error);
+                showResult('Classification failed: ' + error.message, 'error', 'classifyResult');
+            } finally {
+                classifyLoading.style.display = 'none';
+            }
+        });
+        
+        // Watermark form handling
+        const watermarkForm = document.getElementById('watermarkForm');
+        const watermarkLoading = document.getElementById('watermarkLoading');
+        const watermarkResult = document.getElementById('watermarkResult');
+        
+        watermarkForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Watermark form submitted');
+            
+            const formData = new FormData();
+            const file = document.getElementById('watermarkFileInput').files[0];
+            const preset = document.getElementById('presetSelect').value;
+            const customText = document.getElementById('customText').value;
+            
+            if (!file) {
+                showResult('Please select a PDF file', 'error', 'watermarkResult');
+                return;
+            }
+            
+            if (!preset) {
+                showResult('Please select a watermark preset', 'error', 'watermarkResult');
+                return;
+            }
+            
+            console.log('File selected:', file.name, 'Preset:', preset);
+            
+            formData.append('pdf', file);
+            formData.append('preset', preset);
+            
+            if (customText) {
+                formData.append('customText', customText);
+            }
+            
+            // Add custom options if preset is 'custom'
+            if (preset === 'custom') {
+                const opacity = document.getElementById('opacity').value;
+                const fontSize = document.getElementById('fontSize').value;
+                const color = document.getElementById('color').value;
+                const rotation = document.getElementById('rotation').value;
+                
+                if (opacity) formData.append('opacity', opacity);
+                if (fontSize) formData.append('fontSize', fontSize);
+                if (color) formData.append('color', color);
+                if (rotation) formData.append('rotation', rotation);
+            }
+            
+            watermarkLoading.style.display = 'block';
+            watermarkResult.style.display = 'none';
+            
+            try {
+                console.log('Sending request to /api/watermark');
+                const response = await fetch('/api/watermark', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Response received:', response.status);
+                
+                if (response.ok) {
+                    // Handle file download
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = file.name.replace('.pdf', '_watermarked.pdf');
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showResult('Success! Watermarked PDF has been downloaded.', 'success', 'watermarkResult');
+                } else {
+                    const data = await response.json();
+                    showResult('Error: ' + data.error, 'error', 'watermarkResult');
+                }
+            } catch (error) {
+                console.error('Request failed:', error);
+                showResult('Watermark failed: ' + error.message, 'error', 'watermarkResult');
+            } finally {
+                watermarkLoading.style.display = 'none';
+            }
+        });
+        
+        // Helper function to convert file to base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        // Show classification results
+        function showClassificationResult(data) {
+            const results = data.results;
+            const stats = data.statistics;
+            
+            let resultHtml = '<h3>Classification Complete!</h3>' +
+                '<div class="metadata">' +
+                    '<h4>Classification Summary</h4>' +
+                    '<div class="metadata-item">' +
+                        '<strong>Total Files:</strong> ' + stats.totalFiles +
+                    '</div>' +
+                    '<div class="metadata-item">' +
+                        '<strong>Successfully Classified:</strong> ' + stats.successfulClassifications +
+                    '</div>' +
+                    '<div class="metadata-item">' +
+                        '<strong>Failed Classifications:</strong> ' + stats.failedClassifications +
+                    '</div>' +
+                '</div>' +
+                '<div class="classification-results">' +
+                    '<h4>Classification Results</h4>';
+            
+            results.forEach((result, index) => {
+                const statusClass = result.success ? 'success' : 'error';
+                const categoryDisplay = result.success ? 
+                    `${result.categoryName} (${result.category})` : 
+                    'Classification Failed';
+                
+                resultHtml += `
+                    <div class="classification-item ${statusClass}">
+                        <div class="file-info">
+                            <strong>File:</strong> ${result.filename}
+                        </div>
+                        <div class="category-info">
+                            <strong>Category:</strong> ${categoryDisplay}
+                        </div>
+                        ${result.success ? `
+                            <div class="confidence-info">
+                                <strong>Confidence:</strong> ${(result.confidence * 100).toFixed(1)}%
+                            </div>
+                            ${result.requester ? `
+                                <div class="requester-info">
+                                    <strong>Requester:</strong> ${result.requester}
+                                </div>
+                            ` : ''}
+                        ` : `
+                            <div class="error-info">
+                                <strong>Error:</strong> ${result.error}
+                            </div>
+                        `}
+                    </div>
+                `;
+            });
+            
+            resultHtml += '</div>';
+            
+            // Add organize button if there are successful classifications
+            if (stats.successfulClassifications > 0) {
+                resultHtml += `
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button class="btn" onclick="organizeDocuments()">Organize Documents</button>
+                    </div>
+                `;
+            }
+            
+            showResult(resultHtml, 'success', 'classifyResult');
+            
+            // Store classification data for organize function
+            window.lastClassificationData = data;
+        }
+        
+        // Organize documents function
+        window.organizeDocuments = async function() {
+            if (!window.lastClassificationData) {
+                alert('No classification data available');
+                return;
+            }
+            
+            try {
+                const files = document.getElementById('classifyFileInput').files;
+                const formData = new FormData();
+                
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('pdfs', files[i]);
+                }
+                
+                formData.append('createZip', 'true');
+                
+                const response = await fetch('/api/organize-download', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = `organized_documents_${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    alert('Documents organized and downloaded successfully!');
+                } else {
+                    const data = await response.json();
+                    alert('Organization failed: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Organization error:', error);
+                alert('Organization failed: ' + error.message);
+            }
+        };
+        
+        // Utility function to show results
+        function showResult(content, type, elementId) {
+            const resultElement = document.getElementById(elementId);
+            resultElement.innerHTML = content;
+            resultElement.className = 'result ' + type;
+            resultElement.style.display = 'block';
+        }
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('PDF Tools ready');
+            loadWatermarkPresets();
+        });
+        
+        console.log('PDF Tools script loaded successfully');
+    </script>
+</body>
+</html>

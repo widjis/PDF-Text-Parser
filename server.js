@@ -6,6 +6,7 @@ const fs = require('fs');
 const PDFParser = require('./lib/pdfParser');
 const DocumentClassifier = require('./lib/classifier');
 const FileOrganizer = require('./lib/fileOrganizer');
+const WatermarkProcessor = require('./lib/watermarkProcessor');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,6 +15,7 @@ const port = process.env.PORT || 3000;
 const pdfParser = new PDFParser();
 const classifier = new DocumentClassifier();
 const fileOrganizer = new FileOrganizer();
+const watermarkProcessor = new WatermarkProcessor();
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -50,11 +52,15 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static('public'));
 
 // Routes
-app.get('/test', (req, res) => {
-  res.sendFile(path.join(__dirname, 'test-form.html'));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.get('/', (req, res) => {
+app.get('/test', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/landing', (req, res) => {
   res.send(`
 <!DOCTYPE html>
 <html lang="en">
@@ -2223,6 +2229,134 @@ app.get('/api/download/:zipId', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Download failed'
+    });
+  }
+});
+
+// Watermark API endpoints
+
+// Get watermark presets
+app.get('/api/watermark/presets', (req, res) => {
+  try {
+    console.log('📋 [WATERMARK API] Getting watermark presets');
+    
+    const presets = watermarkProcessor.getPresets();
+    
+    res.json({
+      success: true,
+      presets: presets,
+      presetNames: watermarkProcessor.getPresetNames()
+    });
+    
+    console.log('✅ [WATERMARK API] Presets sent successfully');
+  } catch (error) {
+    console.error('❌ [WATERMARK API] Error getting presets:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get watermark presets'
+    });
+  }
+});
+
+// Add watermark to PDF
+app.post('/api/watermark', upload.single('pdf'), async (req, res) => {
+  try {
+    console.log('🔖 [WATERMARK API] Starting watermark request');
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No PDF file provided'
+      });
+    }
+    
+    const { preset, customText, opacity, fontSize, color, rotation } = req.body;
+    
+    console.log('📄 [WATERMARK API] File:', req.file.originalname);
+    console.log('📁 [WATERMARK API] File path:', req.file.path);
+    console.log('📊 [WATERMARK API] File info:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      path: req.file.path
+    });
+    console.log('⚙️ [WATERMARK API] Options:', { preset, customText, opacity, fontSize, color, rotation });
+    
+    // Prepare watermark options
+    const watermarkOptions = {
+      preset: preset,
+      customText: customText,
+      opacity: opacity ? parseFloat(opacity) : undefined,
+      fontSize: fontSize ? parseInt(fontSize) : undefined,
+      color: color,
+      rotation: rotation ? parseInt(rotation) : undefined
+    };
+    
+    // Validate options
+    const validation = watermarkProcessor.validateOptions(watermarkOptions);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid watermark options',
+        details: validation.errors
+      });
+    }
+    
+    // Read file buffer from disk (since we're using diskStorage)
+    let pdfBuffer;
+    try {
+      console.log('📖 [WATERMARK API] Attempting to read file from:', req.file.path);
+      pdfBuffer = fs.readFileSync(req.file.path);
+      console.log(`📊 [WATERMARK API] File buffer read successfully. Size: ${pdfBuffer.length} bytes`);
+    } catch (readError) {
+      console.error('❌ [WATERMARK API] Error reading file:', readError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to read uploaded file'
+      });
+    }
+    
+    // Add watermark
+    const result = await watermarkProcessor.addWatermark(pdfBuffer, watermarkOptions);
+    
+    if (result.success) {
+      console.log('✅ [WATERMARK API] Watermark added successfully');
+      console.log('📊 [WATERMARK API] Original size:', result.originalSize, 'bytes');
+      console.log('📊 [WATERMARK API] Watermarked size:', result.watermarkedSize, 'bytes');
+      
+      // Generate filename
+      const originalName = req.file.originalname;
+      const nameWithoutExt = originalName.replace(/\.pdf$/i, '');
+      const watermarkedFilename = `${nameWithoutExt}_watermarked.pdf`;
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${watermarkedFilename}"`);
+      res.setHeader('Content-Length', result.buffer.length);
+      
+      // Send the watermarked PDF
+      res.send(result.buffer);
+      
+    } else {
+      console.error('❌ [WATERMARK API] Watermark failed:', result.error);
+      res.status(500).json({
+        success: false,
+        error: result.error
+      });
+    }
+    
+    // Clean up uploaded file
+    if (req.file.path) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Error deleting temp file:', err);
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ [WATERMARK API] Unexpected error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error during watermark processing'
     });
   }
 });
